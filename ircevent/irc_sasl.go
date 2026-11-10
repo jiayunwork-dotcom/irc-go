@@ -49,6 +49,8 @@ func (irc *Connection) setupSASLCallbacks() {
 			}
 		case "EXTERNAL":
 			irc.Send("AUTHENTICATE", "+")
+		case scramMech:
+			irc.scramHandleAuthenticate(e)
 		default:
 			// impossible, nothing to do
 		}

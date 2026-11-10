@@ -114,11 +114,14 @@ type Connection struct {
 	pwrite          chan []byte    // receives IRC lines to be sent to the socket
 	wg              sync.WaitGroup // after closing end, wait on this for all the goroutines to stop
 	socket          net.Conn
-	lastError       error
-	quitAt          time.Time  // time Quit() was called
-	reconnSig       chan empty // interrupts sleep in between reconnects (#79)
-	quitEvent       chan empty // wait for final stop
-	pingSent        string     // we sent PING and are waiting for PONG
+	// writeMutex serializes writeLoop socket writes with synchronous
+	// writes made directly from callbacks (e.g. the SCRAM abort frame)
+	writeMutex sync.Mutex
+	lastError  error
+	quitAt     time.Time  // time Quit() was called
+	reconnSig  chan empty // interrupts sleep in between reconnects (#79)
+	quitEvent  chan empty // wait for final stop
+	pingSent   string     // we sent PING and are waiting for PONG
 
 	// IRC protocol connection state
 	currentNick       string // nickname assigned by the server, empty before registration
@@ -137,6 +140,9 @@ type Connection struct {
 	saslChan    chan saslResult // transmits the final outcome of SASL negotiation
 	capsChan    chan capResult  // transmits the final status of each CAP negotiated
 	capFlags    uint32
+	// state of an in-progress SCRAM-SHA-256 exchange, nil outside an
+	// exchange; reset at the start of every (re)connection
+	scram *scramExchange
 
 	// callback state
 	eventsMutex sync.Mutex

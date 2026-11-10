@@ -220,6 +220,9 @@ func (irc *Connection) performWrite(b []byte) error {
 		irc.Log.Printf("--> %s\n", bytes.TrimSpace(b))
 	}
 
+	// serialize with synchronous writes made directly from callbacks
+	irc.writeMutex.Lock()
+	defer irc.writeMutex.Unlock()
 	irc.socket.SetWriteDeadline(time.Now().Add(irc.Timeout))
 	_, err := irc.socket.Write(b)
 	irc.socket.SetWriteDeadline(time.Time{})
@@ -895,7 +898,7 @@ func (irc *Connection) performConfigNormalization() (err error) {
 	if irc.SASLMech == "" {
 		irc.SASLMech = "PLAIN"
 	}
-	if !(irc.SASLMech == "PLAIN" || irc.SASLMech == "EXTERNAL") {
+	if !(irc.SASLMech == "PLAIN" || irc.SASLMech == "EXTERNAL" || irc.SASLMech == scramMech) {
 		return fmt.Errorf("unsupported SASL mechanism %s", irc.SASLMech)
 	}
 	if irc.MaxLineLen <= 0 {
@@ -1064,6 +1067,9 @@ func (irc *Connection) connectInternal(newState ConnectionState) (err error) {
 	irc.isupport = nil
 	irc.capsAcked = make(map[string]string)
 	irc.capsAdvertised = nil
+	// every (re)connection restarts any SCRAM-SHA-256 exchange from
+	// client-first with a freshly generated nonce:
+	irc.scram = nil
 	state := irc.connectionState
 	irc.stateMutex.Unlock()
 	irc.batchMutex.Lock()
